@@ -99,14 +99,6 @@ app/src/main/java/com/powerflow/battery/
 - Android 16 Live Updates（`android.app.ProgressStyle` 等平台 API）
 - 前台服务（`specialUse`）+ 悬浮窗 + 开机广播
 
-## 贡献
-
-欢迎提交 Issue 和 Pull Request，详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
-
 ## 开源许可
 
 [MIT License](LICENSE)
-
-## 致谢
-
-- 真机适配与测试：OnePlus（ColorOS 16）与 OPPO Pad 5（OPD2506 / ColorOS 16.1）
