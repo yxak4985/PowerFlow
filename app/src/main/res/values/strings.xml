@@ -1,0 +1,80 @@
+<resources>
+    <string name="app_name">充放功率</string>
+
+    <!-- 通知 -->
+    <string name="notif_title">充放电功率</string>
+    <string name="notif_body">%1$s · %2$s\n电量 %3$d%% · %4$s · 电流 %5$s</string>
+    <string name="notif_reading">正在读取电池数据…</string>
+    <string name="action_stop">停止监控</string>
+
+    <!-- 主界面 -->
+    <string name="main_running">监控运行中</string>
+    <string name="main_stopped">监控未启动</string>
+    <string name="main_hint_running">返回桌面即可看到状态栏胶囊</string>
+    <string name="main_hint_stopped">打开监控后开始实时读取功率</string>
+    <string name="hero_power_label">当前功率</string>
+    <string name="hero_charging">充电中</string>
+    <string name="hero_discharging">放电中</string>
+    <string name="hero_full">已充满</string>
+    <string name="hero_estimate">估算</string>
+    <string name="source_sensor">来源：电流传感器</string>
+    <string name="source_charge">来源：电量计差分估算</string>
+    <string name="source_energy">来源：能量计差分估算</string>
+    <string name="source_none">暂读不到电流，充电约 1~2 分钟后自动估算</string>
+
+    <!-- 数据卡片 -->
+    <string name="tile_level">电量</string>
+    <string name="tile_voltage">电压</string>
+    <string name="tile_current">电流</string>
+    <string name="tile_temp">温度</string>
+
+    <!-- 设置 -->
+    <string name="section_monitor">监控设置</string>
+    <string name="switch_monitor">功率监控</string>
+    <string name="switch_monitor_sub">启动前台服务，实时读取电池电压与电流</string>
+    <string name="switch_chip">状态栏实时显示</string>
+    <string name="switch_chip_sub">Android 16+ 状态栏胶囊，自动适配 ColorOS 流体云 / 锁屏岛</string>
+    <string name="switch_capsule">悬浮胶囊</string>
+    <string name="switch_capsule_sub">屏幕顶部显示可拖动的玻璃胶囊</string>
+    <string name="switch_lock_capsule">锁屏显示胶囊</string>
+    <string name="switch_lock_capsule_sub">在锁屏界面显示（部分系统会拦截，需开启悬浮窗权限）</string>
+    <string name="refresh_interval">刷新间隔</string>
+
+    <!-- 权限与 ColorOS -->
+    <string name="section_permissions">权限与 OPPO 设置</string>
+    <string name="btn_notification">通知权限</string>
+    <string name="btn_overlay">悬浮窗权限</string>
+    <string name="btn_promoted">实时活动设置</string>
+    <string name="btn_autostart">自启动管理</string>
+    <string name="btn_battery_opt">电池优化</string>
+    <string name="notif_missing">未授予通知权限，锁屏与状态栏内容将不显示</string>
+    <string name="overlay_missing">未授予悬浮窗权限，胶囊无法显示</string>
+    <string name="promoted_disabled">实时活动已关闭，状态栏胶囊可能不显示</string>
+    <string name="coloros_note">ColorOS 适配：锁屏岛与流体云由系统按「实时活动」规则展示。若未显示，请允许本应用自启动、关闭电池优化，并检查「实时活动设置」。</string>
+
+    <!-- 说明 -->
+    <string name="section_about">数据说明</string>
+    <string name="about_note">功率 = 电压 × 电流。ColorOS 不向第三方应用提供实时电流，改用电池电量计差分估算并标记「估算」；部分机型电压广播异常时使用兜底电压（按电量估算），因此数值与专业仪器存在误差属正常。电量计数值约 1~2 分钟更新一次，功率会周期性刷新。</string>
+
+    <!-- 电池健康 -->
+    <string name="section_health">电池健康</string>
+    <string name="health_loading">正在获取电池容量数据…（需开启监控并等待约 1 分钟）</string>
+    <string name="health_capacity">满电容量</string>
+    <string name="health_design">设计容量</string>
+    <string name="health_reference">参考</string>
+    <string name="health_set_design">设置设计容量</string>
+    <string name="health_samples">已取样 %d 次，平均值会随采样增多而更准确</string>
+    <string name="health_note">健康度 = 当前满电容量 ÷ 设计容量。满电容量通过大量采样取平均值估算（系统不向第三方开放实时数据），采样越多越准确，会随温度与充电状态小幅波动。</string>
+    <string name="health_design_title">设计容量</string>
+    <string name="health_design_hint">请输入设计容量（mAh），如 10420</string>
+    <string name="health_save">保存</string>
+    <string name="health_cancel">取消</string>
+
+    <!-- 启动权限引导 -->
+    <string name="perm_overlay_title">需要悬浮窗权限</string>
+    <string name="perm_overlay_msg">开启后才能在屏幕顶部显示功率胶囊，并支持锁屏显示。</string>
+    <string name="perm_battery_title">需要关闭电池优化</string>
+    <string name="perm_battery_msg">关闭电池优化后，监控服务才能在后台持续运行，否则可能被系统杀掉。</string>
+    <string name="perm_go">去授权</string>
+    <string name="perm_later">稍后</string>
+</resources>
