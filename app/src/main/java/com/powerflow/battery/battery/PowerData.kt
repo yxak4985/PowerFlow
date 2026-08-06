@@ -355,3 +355,34 @@ object PowerStore {
         lastReadMs = now
     }
 }
+
+/** 曲线图历史数据：服务每次刷新记录一个点，界面读流渲染。 */
+object HistoryStore {
+    data class Point(
+        val timestamp: Long,
+        val powerW: Double,
+        val currentA: Double,
+        val voltageMv: Int
+    )
+
+    private val _flow = MutableStateFlow<List<Point>>(emptyList())
+    val flow: StateFlow<List<Point>> = _flow
+
+    private val buffer = ArrayDeque<Point>()
+    private const val MAX_POINTS = 600
+
+    fun add(point: Point) {
+        synchronized(buffer) {
+            buffer.addLast(point)
+            while (buffer.size > MAX_POINTS) buffer.removeFirst()
+            _flow.value = buffer.toList()
+        }
+    }
+
+    fun clear() {
+        synchronized(buffer) {
+            buffer.clear()
+            _flow.value = emptyList()
+        }
+    }
+}

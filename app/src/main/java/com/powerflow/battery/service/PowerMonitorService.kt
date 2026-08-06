@@ -27,6 +27,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import com.powerflow.battery.MainActivity
 import com.powerflow.battery.R
+import com.powerflow.battery.battery.HistoryStore
 import com.powerflow.battery.battery.HealthStore
 import com.powerflow.battery.battery.PowerStore
 import com.powerflow.battery.util.Format
@@ -79,10 +80,12 @@ class PowerMonitorService : Service() {
                 Intent.ACTION_SCREEN_ON -> {
                     screenOn = true
                     restartPolling()
+                    syncCapsuleWindow()
                 }
                 Intent.ACTION_SCREEN_OFF -> {
                     screenOn = false
                     restartPolling()
+                    syncCapsuleWindow()
                 }
                 Intent.ACTION_BATTERY_CHANGED -> refreshNow()
             }
@@ -153,6 +156,10 @@ class PowerMonitorService : Service() {
     private fun refreshNow() {
         runCatching { PowerStore.refresh(this) }
         runCatching { HealthStore.refresh() }
+        val s = PowerStore.flow.value
+        if (s.available) {
+            HistoryStore.add(HistoryStore.Point(s.timestamp, s.powerW, s.currentA, s.voltageMv))
+        }
         updateNotification()
     }
 
@@ -234,12 +241,13 @@ class PowerMonitorService : Service() {
     // ---------- 悬浮胶囊（原生 View，避免服务窗口无 LifecycleOwner 崩溃） ----------
 
     private fun syncCapsuleWindow() {
-        if (!Prefs.capsuleEnabled) {
+        // 悬浮胶囊与锁屏胶囊互不绑定：任一开启都需要胶囊窗口（平时 / 锁屏按需显示）
+        if (!Prefs.capsuleEnabled && !Prefs.capsuleLockScreen) {
             removeCapsule()
             return
         }
         if (capsuleView != null) {
-            updateCapsuleFlags()
+            updateCapsuleVisibility()
             return
         }
         val wm = runCatching { getSystemService(WINDOW_SERVICE) as WindowManager }.getOrNull() ?: return
@@ -333,8 +341,16 @@ class PowerMonitorService : Service() {
         capsuleIcon = icon
         capsuleText = text
         capsuleParams = params
-        updateCapsuleFlags()
+        updateCapsuleVisibility()
         startCapsuleUpdates()
+    }
+
+    /** 平时只显示悬浮胶囊，锁屏只显示锁屏胶囊，两者互不绑定。 */
+    private fun updateCapsuleVisibility() {
+        val view = capsuleView ?: return
+        val visible = (Prefs.capsuleEnabled && screenOn) || (Prefs.capsuleLockScreen && !screenOn)
+        runCatching { view.visibility = if (visible) View.VISIBLE else View.GONE }
+        updateCapsuleFlags()
     }
 
     private fun startCapsuleUpdates() {

@@ -58,6 +58,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.powerflow.battery.R
 import com.powerflow.battery.battery.BatterySnapshot
+import com.powerflow.battery.battery.HistoryStore
 import com.powerflow.battery.battery.HealthStore
 import com.powerflow.battery.battery.PowerStore
 import com.powerflow.battery.battery.PowerSource
@@ -68,6 +69,7 @@ import com.powerflow.battery.ui.components.GlassButton
 import com.powerflow.battery.ui.components.GlassCard
 import com.powerflow.battery.ui.components.GlassNavBar
 import com.powerflow.battery.ui.components.GlassSwitchRow
+import com.powerflow.battery.ui.components.MetricsChart
 import com.powerflow.battery.ui.components.SectionTitle
 import com.powerflow.battery.ui.components.StatusPill
 import com.powerflow.battery.ui.theme.AccentCharging
@@ -194,6 +196,9 @@ fun MainScreen() {
     val toggleLockCapsule: (Boolean) -> Unit = { on ->
         Prefs.capsuleLockScreen = on
         lockCapsuleOn = on
+        if (on && !Settings.canDrawOverlays(context)) {
+            OppoHelper.openOverlaySettings(context)
+        }
         sendCapsuleUpdate()
     }
 
@@ -371,6 +376,7 @@ private fun MeasurePage(
     onSetDesign: () -> Unit,
     onResetHealth: () -> Unit
 ) {
+    val history by HistoryStore.flow.collectAsState()
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         // 标题栏
         Row(
@@ -520,6 +526,29 @@ private fun MeasurePage(
             )
         }
 
+        // 实时曲线（功率 / 电流 / 电压 三线合一）
+        GlassCard(Modifier.fillMaxWidth()) {
+            Column {
+                SectionTitle(stringResource(R.string.section_chart))
+                Spacer(Modifier.height(10.dp))
+                if (history.size < 2) {
+                    Text(
+                        text = stringResource(R.string.chart_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 36.dp)
+                    )
+                } else {
+                    MetricsChart(
+                        points = history,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(170.dp)
+                    )
+                }
+            }
+        }
+
         // 电池健康
         GlassCard(Modifier.fillMaxWidth()) {
             Column {
@@ -658,8 +687,8 @@ private fun SettingsPage(
                 GlassSwitchRow(
                     title = stringResource(R.string.switch_lock_capsule),
                     subtitle = stringResource(R.string.switch_lock_capsule_sub),
-                    checked = lockCapsuleOn && capsuleOn && monitorOn,
-                    enabled = capsuleOn && monitorOn,
+                    checked = lockCapsuleOn,
+                    enabled = monitorOn,
                     onCheckedChange = onToggleLockCapsule
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))

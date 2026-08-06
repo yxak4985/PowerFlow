@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 从用户图标边缘自动取样的背景色 -->
-    <color name="ic_launcher_background">#FFFFFF</color>
+    <!-- 卡通电池图标的柔和薄荷背景 -->
+    <color name="ic_launcher_background">#EAF8F4</color>
 </resources>

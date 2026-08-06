@@ -39,10 +39,17 @@
     <string name="switch_capsule">悬浮胶囊</string>
     <string name="switch_capsule_sub">屏幕顶部显示可拖动的玻璃胶囊</string>
     <string name="switch_lock_capsule">锁屏显示胶囊</string>
-    <string name="switch_lock_capsule_sub">在锁屏界面显示（部分系统会拦截，需开启悬浮窗权限）</string>
+    <string name="switch_lock_capsule_sub">独立于悬浮胶囊：仅开启此项时只在锁屏显示（需开启悬浮窗权限）</string>
     <string name="switch_dual_cell">双电芯电池</string>
     <string name="switch_dual_cell_sub">串联双电芯机型电压显示约 7~9V；开启后按双电芯电压范围识别，避免误判为异常</string>
     <string name="refresh_interval">刷新间隔</string>
+
+    <!-- 实时曲线 -->
+    <string name="section_chart">实时曲线</string>
+    <string name="chart_empty">开启监控后自动记录功率 / 电流 / 电压曲线</string>
+    <string name="chart_power">功率</string>
+    <string name="chart_current">电流</string>
+    <string name="chart_voltage">电压</string>
 
     <!-- 权限与 ColorOS -->
     <string name="section_permissions">权限与 OPPO 设置</string>
