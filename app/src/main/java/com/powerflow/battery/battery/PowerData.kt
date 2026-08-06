@@ -8,6 +8,7 @@ import com.powerflow.battery.util.Prefs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.abs
+import kotlin.math.max
 
 /** 功率数据来源。OPPO/部分机型会屏蔽某些传感器，需要多级兜底。 */
 enum class PowerSource { SENSOR, ESTIMATE_CHARGE, ESTIMATE_ENERGY, NONE }
@@ -170,7 +171,9 @@ object PowerReader {
     /**
      * 用电量计（µAh）在一段时间内的变化量估算平均功率。
      * ColorOS 的电量计数值可能 5~10 分钟才跳变一次，因此估算窗口要拉长：
-     * 优先取“值与最新不同且跨度 >= 30 秒”的采样对，兜底取 8 分钟前的采样。
+     * 优先取跨度最长（从最新往回找第一个值有变化的采样对，跨度 ≥60 秒）的采样对。
+     * 粗粒度电量计（如 OPD2506）会整批跳变（一次 50+mAh），短窗口会把整批跳变
+     * 放大成假尖峰（USB 充电却显示 19.5W），长跨度平均才能得到接近真实的功率。
      */
     private fun estimateFromCharge(voltageMv: Int): Double? {
         val copy: List<Sample>
@@ -178,15 +181,15 @@ object PowerReader {
         if (copy.size < 2 || voltageMv <= 0) return null
         val newest = copy.last()
         var oldest: Sample? = null
-        // 优先：值与最新不同、跨度 >= 30s
+        // 从最新往回找，第一个满足条件的即跨度最大
         for (i in copy.size - 2 downTo 0) {
             val s = copy[i]
-            if (newest.value != s.value && newest.timeMs - s.timeMs >= 30_000) {
+            if (newest.value != s.value && newest.timeMs - s.timeMs >= 60_000) {
                 oldest = s
                 break
             }
         }
-        // 兜底：跨度 >= 8 分钟（即使值相同，说明窗口内无跳变，会返回 null）
+        // 兜底：跨度 >= 8 分钟（值相同说明窗口内无跳变，返回 null 交给保持逻辑）
         if (oldest == null) {
             for (i in copy.size - 2 downTo 0) {
                 val s = copy[i]
@@ -325,7 +328,15 @@ object PowerStore {
         val now = System.currentTimeMillis()
         val out: BatterySnapshot = when {
             raw.estimated && raw.powerW > 0 -> {
-                val s = if (smoothedW > 0) smoothedW * 0.6 + raw.powerW * 0.4 else raw.powerW
+                val prev = smoothedW
+                // 粗粒度电量计整批跳变会产生短时尖峰：限制单次变化幅度 + 更重 EMA 平滑
+                val maxStep = max(1.2, prev * 0.3)
+                val bounded = if (prev > 0) {
+                    prev + (raw.powerW - prev).coerceIn(-maxStep, maxStep)
+                } else {
+                    raw.powerW
+                }
+                val s = if (prev > 0) prev * 0.7 + bounded * 0.3 else bounded
                 smoothedW = s
                 lastEstimateMs = now
                 lastEstimateCharging = raw.charging

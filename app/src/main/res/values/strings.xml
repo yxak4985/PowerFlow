@@ -22,7 +22,7 @@
     <string name="source_sensor">来源：电流传感器</string>
     <string name="source_charge">来源：电量计差分估算</string>
     <string name="source_energy">来源：能量计差分估算</string>
-    <string name="source_none">暂读不到电流，充电约 1~2 分钟后自动估算</string>
+    <string name="source_none">暂读不到电流，电量计更新后自动估算（粗粒度机型约需数分钟）</string>
 
     <!-- 数据卡片 -->
     <string name="tile_level">电量</string>
