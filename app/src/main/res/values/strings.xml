@@ -12,6 +12,8 @@
     <string name="main_stopped">监控未启动</string>
     <string name="main_hint_running">返回桌面即可看到状态栏胶囊</string>
     <string name="main_hint_stopped">打开监控后开始实时读取功率</string>
+    <string name="tab_measure">测量</string>
+    <string name="tab_settings">设置</string>
     <string name="hero_power_label">当前功率</string>
     <string name="hero_charging">充电中</string>
     <string name="hero_discharging">放电中</string>
@@ -39,7 +41,7 @@
     <string name="switch_lock_capsule">锁屏显示胶囊</string>
     <string name="switch_lock_capsule_sub">在锁屏界面显示（部分系统会拦截，需开启悬浮窗权限）</string>
     <string name="switch_dual_cell">双电芯电池</string>
-    <string name="switch_dual_cell_sub">串联双电芯机型电压约翻倍、容量计量方式不同；开启后自动重置健康检测数据</string>
+    <string name="switch_dual_cell_sub">串联双电芯机型电压显示约 7~9V；开启后按双电芯电压范围识别，避免误判为异常</string>
     <string name="refresh_interval">刷新间隔</string>
 
     <!-- 权限与 ColorOS -->
@@ -60,14 +62,14 @@
 
     <!-- 电池健康 -->
     <string name="section_health">电池健康</string>
-    <string name="health_loading">正在获取电池容量数据…（需开启监控，电量处于 20%~85% 时才会采样）</string>
+    <string name="health_loading" formatted="false">正在获取电池容量数据…（需开启监控，电量处于 20%~85% 时才会采样）</string>
     <string name="health_capacity">满电容量</string>
     <string name="health_design">设计容量</string>
     <string name="health_reference">参考</string>
     <string name="health_set_design">设置设计容量</string>
     <string name="health_reset">重置检测</string>
     <string name="health_samples">已取样 %d 次，平均值会随采样增多而更准确</string>
-    <string name="health_note">健康度 = 当前满电容量 ÷ 设计容量。仅在电量 20%~85% 区间采样（避开涓流与快充末期等不可信时段），通过大量采样取平均值估算，采样越多越准确，会随温度与充电状态小幅波动。</string>
+    <string name="health_note" formatted="false">健康度 = 当前满电容量 ÷ 设计容量。仅在电量 20%~85% 区间采样（避开涓流与快充末期等不可信时段），通过大量采样取平均值估算，采样越多越准确，会随温度与充电状态小幅波动。</string>
     <string name="health_design_title">设计容量</string>
     <string name="health_design_hint">请输入设计容量（mAh），如 10420</string>
     <string name="health_save">保存</string>

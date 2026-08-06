@@ -13,8 +13,8 @@ android {
         applicationId = "com.powerflow.battery"
         minSdk = 26
         targetSdk = 37
-        versionCode = 23
-        versionName = "1.23"
+        versionCode = 30
+        versionName = "2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -44,6 +44,7 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.core.ktx)

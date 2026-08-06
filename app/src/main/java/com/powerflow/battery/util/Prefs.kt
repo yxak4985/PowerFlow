@@ -19,6 +19,9 @@ object Prefs {
     private const val KEY_FCC_SUM = "fcc_sum"
     private const val KEY_FCC_COUNT = "fcc_count"
     private const val KEY_FCC_LAST_VALUE = "fcc_last_value"
+    private const val KEY_DATA_VERSION = "health_data_version"
+    // 健康数据格式版本：算法量纲变化时 +1，旧数据自动清空重新统计
+    private const val DATA_VERSION = 2
 
     private lateinit var appContext: Context
     private val sp: SharedPreferences
@@ -26,6 +29,12 @@ object Prefs {
 
     fun init(context: Context) {
         appContext = context.applicationContext
+        // v1.23 双电芯开关曾对容量 ×2，且切换时自动重置后新采的样本为 ×2 量纲；
+        // v2.0 已修正（系统电量计本就是整机口径），旧样本不再可比较，启动时自动清空
+        if (sp.getInt(KEY_DATA_VERSION, 0) != DATA_VERSION) {
+            sp.edit().putInt(KEY_DATA_VERSION, DATA_VERSION).apply()
+            resetHealthData()
+        }
     }
 
     var monitorEnabled: Boolean

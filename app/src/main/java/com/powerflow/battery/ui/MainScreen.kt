@@ -11,7 +11,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,10 +22,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
@@ -34,6 +33,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -42,6 +42,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +57,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.powerflow.battery.R
+import com.powerflow.battery.battery.BatterySnapshot
 import com.powerflow.battery.battery.HealthStore
 import com.powerflow.battery.battery.PowerStore
 import com.powerflow.battery.battery.PowerSource
@@ -64,6 +66,7 @@ import com.powerflow.battery.ui.components.AuroraBackground
 import com.powerflow.battery.ui.components.BatteryRing
 import com.powerflow.battery.ui.components.GlassButton
 import com.powerflow.battery.ui.components.GlassCard
+import com.powerflow.battery.ui.components.GlassNavBar
 import com.powerflow.battery.ui.components.GlassSwitchRow
 import com.powerflow.battery.ui.components.SectionTitle
 import com.powerflow.battery.ui.components.StatusPill
@@ -84,6 +87,7 @@ fun MainScreen() {
     val snapshot by PowerStore.flow.collectAsState()
     val health by HealthStore.flow.collectAsState()
 
+    var selectedPage by rememberSaveable { mutableStateOf(0) }
     var monitorOn by remember { mutableStateOf(Prefs.monitorEnabled) }
     var chipOn by remember { mutableStateOf(Prefs.statusBarChip) }
     var capsuleOn by remember { mutableStateOf(Prefs.capsuleEnabled) }
@@ -105,7 +109,7 @@ fun MainScreen() {
     val notifLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) {
-            notifGranted = NotificationManagerCompat.from(context).areNotificationsEnabled()
+        notifGranted = NotificationManagerCompat.from(context).areNotificationsEnabled()
     }
 
     LaunchedEffect(Unit) {
@@ -196,410 +200,71 @@ fun MainScreen() {
     val toggleDualCell: (Boolean) -> Unit = { on ->
         Prefs.dualCell = on
         dualCellOn = on
-        // 双电芯切换后电压/容量量纲改变，旧采样数据不再可比较，自动清空重新统计
-        Prefs.resetHealthData()
-        HealthStore.refresh()
     }
 
     Box(Modifier.fillMaxSize()) {
         AuroraBackground(dark = isSystemInDarkTheme(), modifier = Modifier.fillMaxSize())
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .systemBarsPadding()
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Spacer(Modifier.height(4.dp))
-
-            // 标题栏
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+        Scaffold(
+            containerColor = Color.Transparent,
+            bottomBar = {
+                GlassNavBar(selected = selectedPage, onSelect = { selectedPage = it })
+            }
+        ) { innerPadding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.app_name),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = if (monitorOn) {
-                            stringResource(R.string.main_hint_running)
-                        } else {
-                            stringResource(R.string.main_hint_stopped)
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f)
-                    )
-                }
-                StatusPill(running = monitorOn)
-            }
-
-            // 功率主卡片
-            GlassCard(Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.hero_power_label),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            val animated by animateFloatAsState(
-                                targetValue = snapshot.powerW.toFloat(),
-                                animationSpec = tween(700),
-                                label = "power"
-                            )
-                            Text(
-                                text = if (snapshot.available) Format.power(animated.toDouble()) else "—",
-                                fontSize = 58.sp,
-                                fontWeight = FontWeight.Light,
-                                letterSpacing = (-1.5).sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                text = "W",
-                                fontSize = 20.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(bottom = 10.dp)
-                            )
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            val statusColor = when {
-                                snapshot.full -> AccentFull
-                                snapshot.charging -> AccentCharging
-                                else -> AccentDischarging
-                            }
-                            val statusText = when {
-                                snapshot.full -> stringResource(R.string.hero_full)
-                                snapshot.charging -> stringResource(R.string.hero_charging)
-                                else -> stringResource(R.string.hero_discharging)
-                            }
-                            Box(
-                                Modifier
-                                    .size(8.dp)
-                                    .clip(RoundedCornerShape(50))
-                                    .background(statusColor)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                text = statusText,
-                                color = statusColor,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            if (snapshot.estimated) {
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = stringResource(R.string.hero_estimate),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 12.sp
-                                )
-                            }
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        val sourceText = when (snapshot.source) {
-                            PowerSource.SENSOR -> stringResource(R.string.source_sensor)
-                            PowerSource.ESTIMATE_CHARGE -> stringResource(R.string.source_charge)
-                            PowerSource.ESTIMATE_ENERGY -> stringResource(R.string.source_energy)
-                            PowerSource.NONE -> stringResource(R.string.source_none)
-                        }
-                        Text(
-                            text = sourceText,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        )
-                    }
-                    Box(Modifier.size(92.dp)) {
-                        BatteryRing(
-                            level = snapshot.level,
-                            charging = snapshot.charging,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                }
-            }
-
-            // 数据卡片
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                StatTile(
-                    label = stringResource(R.string.tile_level),
-                    value = "${snapshot.level}%",
-                    modifier = Modifier.weight(1f)
-                )
-                StatTile(
-                    label = stringResource(R.string.tile_voltage),
-                    value = if (snapshot.voltageEstimated) {
-                        "${Format.voltage(snapshot.voltageMv)} 估"
-                    } else {
-                        Format.voltage(snapshot.voltageMv)
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                StatTile(
-                    label = stringResource(R.string.tile_current),
-                    value = Format.current(snapshot.currentA),
-                    modifier = Modifier.weight(1f)
-                )
-                StatTile(
-                    label = stringResource(R.string.tile_temp),
-                    value = Format.temp(snapshot.tempC),
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            // 电池健康
-            GlassCard(Modifier.fillMaxWidth()) {
-                Column {
-                    SectionTitle(stringResource(R.string.section_health))
-                    Spacer(Modifier.height(10.dp))
-                    if (health.available) {
-                        val healthColor = when {
-                            health.sohPct >= 90 -> AccentCharging
-                            health.sohPct >= 80 -> LiquidAmber
-                            else -> MaterialTheme.colorScheme.error
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    text = "电池健康度",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    text = String.format(Locale.CHINA, "%.1f", health.sohPct) + "%",
-                                    fontSize = 34.sp,
-                                    fontWeight = FontWeight.Light,
-                                    color = healthColor
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    text = "${stringResource(R.string.health_capacity)} ${health.fccMah.toInt()} mAh（估算）",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(Modifier.height(3.dp))
-                                Text(
-                                    text = "${stringResource(R.string.health_design)} ${health.designMah} mAh" +
-                                        if (health.designFallback) {
-                                            "（${stringResource(R.string.health_reference)}）"
-                                        } else {
-                                            ""
-                                        },
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = String.format(Locale.CHINA, stringResource(R.string.health_samples), health.sampleCount),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = stringResource(R.string.health_note),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        Text(
-                            text = stringResource(R.string.health_loading),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    Row {
-                        TextButton(onClick = {
+                Spacer(Modifier.height(4.dp))
+                when (selectedPage) {
+                    0 -> MeasurePage(
+                        snapshot = snapshot,
+                        health = health,
+                        monitorOn = monitorOn,
+                        onSetDesign = {
                             designInput = if (Prefs.designCapacity > 0) Prefs.designCapacity.toString() else ""
                             showDesignDialog = true
-                        }) {
-                            Text(stringResource(R.string.health_set_design))
-                        }
-                        TextButton(onClick = { showResetDialog = true }) {
-                            Text(
-                                text = stringResource(R.string.health_reset),
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    }
-                }
-            }
-
-            // 监控设置
-            GlassCard(Modifier.fillMaxWidth()) {
-                Column {
-                    SectionTitle(stringResource(R.string.section_monitor))
-                    Spacer(Modifier.height(8.dp))
-                    GlassSwitchRow(
-                        title = stringResource(R.string.switch_monitor),
-                        subtitle = stringResource(R.string.switch_monitor_sub),
-                        checked = monitorOn,
-                        onCheckedChange = toggleMonitor
+                        },
+                        onResetHealth = { showResetDialog = true }
                     )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-                    GlassSwitchRow(
-                        title = stringResource(R.string.switch_chip),
-                        subtitle = stringResource(R.string.switch_chip_sub),
-                        checked = chipOn && monitorOn,
-                        enabled = monitorOn,
-                        onCheckedChange = { on ->
+                    else -> SettingsPage(
+                        monitorOn = monitorOn,
+                        chipOn = chipOn,
+                        capsuleOn = capsuleOn,
+                        lockCapsuleOn = lockCapsuleOn,
+                        dualCellOn = dualCellOn,
+                        refreshMs = refreshMs,
+                        notifGranted = notifGranted,
+                        overlayGranted = overlayGranted,
+                        promotedGranted = promotedGranted,
+                        promotedAvailable = promotedAvailable,
+                        onToggleMonitor = toggleMonitor,
+                        onToggleChip = { on ->
                             Prefs.statusBarChip = on
                             chipOn = on
+                        },
+                        onToggleCapsule = toggleCapsule,
+                        onToggleLockCapsule = toggleLockCapsule,
+                        onToggleDualCell = toggleDualCell,
+                        onRefreshMs = { ms ->
+                            Prefs.refreshMs = ms
+                            refreshMs = ms
+                        },
+                        onRequestNotif = { notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
+                        onOpenOverlay = { OppoHelper.openOverlaySettings(context) },
+                        onOpenAutostart = { OppoHelper.openAutoStartSettings(context) },
+                        onOpenBatteryOpt = { OppoHelper.openBatteryOptimization(context) },
+                        onOpenPromoted = {
+                            OppoHelper.openPromotedSettings(context)
+                            promotedGranted = OppoHelper.canPostPromoted(context)
                         }
                     )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-                    GlassSwitchRow(
-                        title = stringResource(R.string.switch_capsule),
-                        subtitle = stringResource(R.string.switch_capsule_sub),
-                        checked = capsuleOn && monitorOn,
-                        enabled = monitorOn,
-                        onCheckedChange = toggleCapsule
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-                    GlassSwitchRow(
-                        title = stringResource(R.string.switch_lock_capsule),
-                        subtitle = stringResource(R.string.switch_lock_capsule_sub),
-                        checked = lockCapsuleOn && capsuleOn && monitorOn,
-                        enabled = capsuleOn && monitorOn,
-                        onCheckedChange = toggleLockCapsule
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-                    GlassSwitchRow(
-                        title = stringResource(R.string.switch_dual_cell),
-                        subtitle = stringResource(R.string.switch_dual_cell_sub),
-                        checked = dualCellOn,
-                        onCheckedChange = toggleDualCell
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = stringResource(R.string.refresh_interval),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(1000 to "1 秒", 2000 to "2 秒", 5000 to "5 秒").forEach { (ms, label) ->
-                            FilterChip(
-                                selected = refreshMs == ms,
-                                onClick = {
-                                    Prefs.refreshMs = ms
-                                    refreshMs = ms
-                                },
-                                label = { Text(label) },
-                                enabled = monitorOn,
-                                colors = FilterChipDefaults.filterChipColors(
-                                    containerColor = Color.White.copy(alpha = 0.25f),
-                                    labelColor = MaterialTheme.colorScheme.onSurface,
-                                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
-                                    selectedLabelColor = Color.White
-                                )
-                            )
-                        }
-                    }
                 }
+                Spacer(Modifier.height(24.dp))
             }
-
-            // 权限与 ColorOS
-            GlassCard(Modifier.fillMaxWidth()) {
-                Column {
-                    SectionTitle(stringResource(R.string.section_permissions))
-                    Spacer(Modifier.height(10.dp))
-                    if (!notifGranted) {
-                        WarnText(stringResource(R.string.notif_missing))
-                    }
-                    if (monitorOn && capsuleOn && !overlayGranted) {
-                        WarnText(stringResource(R.string.overlay_missing))
-                    }
-                    if (promotedAvailable && monitorOn && chipOn && !promotedGranted) {
-                        WarnText(stringResource(R.string.promoted_disabled))
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        GlassButton(
-                            text = stringResource(R.string.btn_notification),
-                            onClick = { notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
-                            modifier = Modifier.weight(1f),
-                            enabled = !notifGranted
-                        )
-                        GlassButton(
-                            text = stringResource(R.string.btn_overlay),
-                            onClick = { OppoHelper.openOverlaySettings(context) },
-                            modifier = Modifier.weight(1f),
-                            enabled = !overlayGranted
-                        )
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        GlassButton(
-                            text = stringResource(R.string.btn_autostart),
-                            onClick = { OppoHelper.openAutoStartSettings(context) },
-                            modifier = Modifier.weight(1f)
-                        )
-                        GlassButton(
-                            text = stringResource(R.string.btn_battery_opt),
-                            onClick = { OppoHelper.openBatteryOptimization(context) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    if (promotedAvailable) {
-                        Spacer(Modifier.height(10.dp))
-                        GlassButton(
-                            text = stringResource(R.string.btn_promoted),
-                            onClick = {
-                                OppoHelper.openPromotedSettings(context)
-                                promotedGranted = OppoHelper.canPostPromoted(context)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !promotedGranted
-                        )
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = stringResource(R.string.coloros_note),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            // 数据说明
-            GlassCard(Modifier.fillMaxWidth()) {
-                Column {
-                    SectionTitle(stringResource(R.string.section_about))
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(R.string.about_note),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(24.dp))
         }
 
         if (showDesignDialog) {
@@ -693,6 +358,420 @@ fun MainScreen() {
                     }
                 }
             )
+        }
+    }
+}
+
+/** 第一页：测量数据展示（功率、电量电压电流温度、电池健康）。 */
+@Composable
+private fun MeasurePage(
+    snapshot: BatterySnapshot,
+    health: HealthStore.HealthInfo,
+    monitorOn: Boolean,
+    onSetDesign: () -> Unit,
+    onResetHealth: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        // 标题栏
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = if (monitorOn) {
+                        stringResource(R.string.main_hint_running)
+                    } else {
+                        stringResource(R.string.main_hint_stopped)
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f)
+                )
+            }
+            StatusPill(running = monitorOn)
+        }
+
+        // 功率主卡片
+        GlassCard(Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.hero_power_label),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        val animated by animateFloatAsState(
+                            targetValue = snapshot.powerW.toFloat(),
+                            animationSpec = tween(700),
+                            label = "power"
+                        )
+                        Text(
+                            text = if (snapshot.available) Format.power(animated.toDouble()) else "—",
+                            fontSize = 58.sp,
+                            fontWeight = FontWeight.Light,
+                            letterSpacing = (-1.5).sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "W",
+                            fontSize = 20.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 10.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val statusColor = when {
+                            snapshot.full -> AccentFull
+                            snapshot.charging -> AccentCharging
+                            else -> AccentDischarging
+                        }
+                        val statusText = when {
+                            snapshot.full -> stringResource(R.string.hero_full)
+                            snapshot.charging -> stringResource(R.string.hero_charging)
+                            else -> stringResource(R.string.hero_discharging)
+                        }
+                        Box(
+                            Modifier
+                                .size(8.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(statusColor)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = statusText,
+                            color = statusColor,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        if (snapshot.estimated) {
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = stringResource(R.string.hero_estimate),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    val sourceText = when (snapshot.source) {
+                        PowerSource.SENSOR -> stringResource(R.string.source_sensor)
+                        PowerSource.ESTIMATE_CHARGE -> stringResource(R.string.source_charge)
+                        PowerSource.ESTIMATE_ENERGY -> stringResource(R.string.source_energy)
+                        PowerSource.NONE -> stringResource(R.string.source_none)
+                    }
+                    Text(
+                        text = sourceText,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+                Box(Modifier.size(92.dp)) {
+                    BatteryRing(
+                        level = snapshot.level,
+                        charging = snapshot.charging,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+
+        // 数据卡片
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            StatTile(
+                label = stringResource(R.string.tile_level),
+                value = "${snapshot.level}%",
+                modifier = Modifier.weight(1f)
+            )
+            StatTile(
+                label = stringResource(R.string.tile_voltage),
+                value = if (snapshot.voltageEstimated) {
+                    "${Format.voltage(snapshot.voltageMv)} 估"
+                } else {
+                    Format.voltage(snapshot.voltageMv)
+                },
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            StatTile(
+                label = stringResource(R.string.tile_current),
+                value = Format.current(snapshot.currentA),
+                modifier = Modifier.weight(1f)
+            )
+            StatTile(
+                label = stringResource(R.string.tile_temp),
+                value = Format.temp(snapshot.tempC),
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        // 电池健康
+        GlassCard(Modifier.fillMaxWidth()) {
+            Column {
+                SectionTitle(stringResource(R.string.section_health))
+                Spacer(Modifier.height(10.dp))
+                if (health.available) {
+                    val healthColor = when {
+                        health.sohPct >= 90 -> AccentCharging
+                        health.sohPct >= 80 -> LiquidAmber
+                        else -> MaterialTheme.colorScheme.error
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = "电池健康度",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = String.format(Locale.CHINA, "%.1f", health.sohPct) + "%",
+                                fontSize = 34.sp,
+                                fontWeight = FontWeight.Light,
+                                color = healthColor
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "${stringResource(R.string.health_capacity)} ${health.fccMah.toInt()} mAh（估算）",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(Modifier.height(3.dp))
+                            Text(
+                                text = "${stringResource(R.string.health_design)} ${health.designMah} mAh" +
+                                    if (health.designFallback) {
+                                        "（${stringResource(R.string.health_reference)}）"
+                                    } else {
+                                        ""
+                                    },
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = String.format(Locale.CHINA, stringResource(R.string.health_samples), health.sampleCount),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.health_note),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        text = stringResource(R.string.health_loading),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                Row {
+                    TextButton(onClick = onSetDesign) {
+                        Text(stringResource(R.string.health_set_design))
+                    }
+                    TextButton(onClick = onResetHealth) {
+                        Text(
+                            text = stringResource(R.string.health_reset),
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 第二页：设置项（监控设置、权限与 OPPO 设置、数据说明）。 */
+@Composable
+private fun SettingsPage(
+    monitorOn: Boolean,
+    chipOn: Boolean,
+    capsuleOn: Boolean,
+    lockCapsuleOn: Boolean,
+    dualCellOn: Boolean,
+    refreshMs: Int,
+    notifGranted: Boolean,
+    overlayGranted: Boolean,
+    promotedGranted: Boolean,
+    promotedAvailable: Boolean,
+    onToggleMonitor: (Boolean) -> Unit,
+    onToggleChip: (Boolean) -> Unit,
+    onToggleCapsule: (Boolean) -> Unit,
+    onToggleLockCapsule: (Boolean) -> Unit,
+    onToggleDualCell: (Boolean) -> Unit,
+    onRefreshMs: (Int) -> Unit,
+    onRequestNotif: () -> Unit,
+    onOpenOverlay: () -> Unit,
+    onOpenAutostart: () -> Unit,
+    onOpenBatteryOpt: () -> Unit,
+    onOpenPromoted: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        // 监控设置
+        GlassCard(Modifier.fillMaxWidth()) {
+            Column {
+                SectionTitle(stringResource(R.string.section_monitor))
+                Spacer(Modifier.height(8.dp))
+                GlassSwitchRow(
+                    title = stringResource(R.string.switch_monitor),
+                    subtitle = stringResource(R.string.switch_monitor_sub),
+                    checked = monitorOn,
+                    onCheckedChange = onToggleMonitor
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                GlassSwitchRow(
+                    title = stringResource(R.string.switch_chip),
+                    subtitle = stringResource(R.string.switch_chip_sub),
+                    checked = chipOn && monitorOn,
+                    enabled = monitorOn,
+                    onCheckedChange = onToggleChip
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                GlassSwitchRow(
+                    title = stringResource(R.string.switch_capsule),
+                    subtitle = stringResource(R.string.switch_capsule_sub),
+                    checked = capsuleOn && monitorOn,
+                    enabled = monitorOn,
+                    onCheckedChange = onToggleCapsule
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                GlassSwitchRow(
+                    title = stringResource(R.string.switch_lock_capsule),
+                    subtitle = stringResource(R.string.switch_lock_capsule_sub),
+                    checked = lockCapsuleOn && capsuleOn && monitorOn,
+                    enabled = capsuleOn && monitorOn,
+                    onCheckedChange = onToggleLockCapsule
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                GlassSwitchRow(
+                    title = stringResource(R.string.switch_dual_cell),
+                    subtitle = stringResource(R.string.switch_dual_cell_sub),
+                    checked = dualCellOn,
+                    onCheckedChange = onToggleDualCell
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = stringResource(R.string.refresh_interval),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(1000 to "1 秒", 2000 to "2 秒", 5000 to "5 秒").forEach { (ms, label) ->
+                        FilterChip(
+                            selected = refreshMs == ms,
+                            onClick = { onRefreshMs(ms) },
+                            label = { Text(label) },
+                            enabled = monitorOn,
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = Color.White.copy(alpha = 0.25f),
+                                labelColor = MaterialTheme.colorScheme.onSurface,
+                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+                                selectedLabelColor = Color.White
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        // 权限与 ColorOS
+        GlassCard(Modifier.fillMaxWidth()) {
+            Column {
+                SectionTitle(stringResource(R.string.section_permissions))
+                Spacer(Modifier.height(10.dp))
+                if (!notifGranted) {
+                    WarnText(stringResource(R.string.notif_missing))
+                }
+                if (monitorOn && capsuleOn && !overlayGranted) {
+                    WarnText(stringResource(R.string.overlay_missing))
+                }
+                if (promotedAvailable && monitorOn && chipOn && !promotedGranted) {
+                    WarnText(stringResource(R.string.promoted_disabled))
+                }
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    GlassButton(
+                        text = stringResource(R.string.btn_notification),
+                        onClick = onRequestNotif,
+                        modifier = Modifier.weight(1f),
+                        enabled = !notifGranted
+                    )
+                    GlassButton(
+                        text = stringResource(R.string.btn_overlay),
+                        onClick = onOpenOverlay,
+                        modifier = Modifier.weight(1f),
+                        enabled = !overlayGranted
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    GlassButton(
+                        text = stringResource(R.string.btn_autostart),
+                        onClick = onOpenAutostart,
+                        modifier = Modifier.weight(1f)
+                    )
+                    GlassButton(
+                        text = stringResource(R.string.btn_battery_opt),
+                        onClick = onOpenBatteryOpt,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (promotedAvailable) {
+                    Spacer(Modifier.height(10.dp))
+                    GlassButton(
+                        text = stringResource(R.string.btn_promoted),
+                        onClick = onOpenPromoted,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !promotedGranted
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = stringResource(R.string.coloros_note),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // 数据说明
+        GlassCard(Modifier.fillMaxWidth()) {
+            Column {
+                SectionTitle(stringResource(R.string.section_about))
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.about_note),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

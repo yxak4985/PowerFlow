@@ -273,8 +273,8 @@ object PowerReader {
                 val span = abs(b.level - a.level)
                 if (span >= 1) {
                     val dq = abs(b.value - a.value).toDouble() // µAh
-                    // 双电芯机型的电量计通常只对应单电芯，容量按整机口径需要 ×2
-                    val fcc = dq / span * 100.0 / 1000.0 * (if (Prefs.dualCell) 2.0 else 1.0) // mAh
+                    // 实测：双电芯机型（如 PHK110）系统电量计已是整机口径，直接换算即可
+                    val fcc = dq / span * 100.0 / 1000.0 // mAh
                     if (fcc in 2000.0..30000.0 && span > bestSpan) {
                         bestFcc = fcc
                         bestSpan = span
@@ -295,8 +295,7 @@ object PowerReader {
         val counter = lastCounterUah
         // 电量 20%~85% 区间外（如涓流区/快充末期）电量计换算不可信
         if (lv in 20..85 && counter > 0) {
-            // 双电芯机型：电量计对应单电芯容量，换算整机口径需 ×2
-            val fcc = counter / lv.toDouble() * 100.0 / 1000.0 * (if (Prefs.dualCell) 2.0 else 1.0)
+            val fcc = counter / lv.toDouble() * 100.0 / 1000.0
             if (fcc in 2000.0..30000.0) return fcc
         }
         return null
