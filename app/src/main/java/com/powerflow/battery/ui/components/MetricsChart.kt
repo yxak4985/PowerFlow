@@ -1,14 +1,14 @@
 package com.powerflow.battery.ui.components
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -33,11 +33,13 @@ import com.powerflow.battery.ui.theme.LiquidAmber
 import com.powerflow.battery.ui.theme.LiquidBlue
 import com.powerflow.battery.util.Format
 import com.powerflow.battery.util.Prefs
+import kotlinx.coroutines.isActive
+import kotlin.math.min
 
 /**
  * 功率 / 电压 / 电流三区曲线：上区功率、中区电压、下区电流，各区独立缩放。
- * 数据保留原始起伏（不做平滑）；新数据点到达时整条线连续向左滑动（滚动动画），
- * 刷新观感流畅连贯。每条线末端是小胶囊，实时显示该区当前值。
+ * 纯时间轴滚动：每个点按时间戳逐帧连续左移（右缘预留一个刷新间隔），没有归零跳变；
+ * 胶囊带惯性指数平滑，像球一样平滑滚到新数据位置。数据保留原始起伏。
  */
 @Composable
 fun MetricsChart(points: List<HistoryStore.Point>, modifier: Modifier = Modifier) {
@@ -47,20 +49,18 @@ fun MetricsChart(points: List<HistoryStore.Point>, modifier: Modifier = Modifier
     val powerName = stringResource(R.string.chart_power)
     val voltageName = stringResource(R.string.chart_voltage)
     val currentName = stringResource(R.string.chart_current)
+    val refreshMs = Prefs.refreshMs
 
-    // 滚动动画：每次新点到达，相位从 0 滑到 1（持续一个刷新周期），整条线连续左移
-    val slide = remember { Animatable(0f) }
-    val lastTs = points.lastOrNull()?.timestamp
-    LaunchedEffect(lastTs) {
-        if (lastTs != null) {
-            slide.snapTo(0f)
-            slide.animateTo(
-                1f,
-                animationSpec = tween(durationMillis = Prefs.refreshMs, easing = LinearEasing)
-            )
+    // 逐帧刷新时钟：曲线按时间连续滚动
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            withFrameNanos { }
+            now = System.currentTimeMillis()
         }
     }
-    val phi = slide.value
+    // 胶囊的水平位置（px），带惯性平滑，避免新点到达时瞬移
+    val capsuleX = remember { FloatArray(1) { -1f } }
 
     Canvas(modifier) {
         val w = size.width
@@ -69,6 +69,8 @@ fun MetricsChart(points: List<HistoryStore.Point>, modifier: Modifier = Modifier
         val pillH = 18.dp.toPx()
         val plotLeft = 10.dp.toPx()
         val plotRight = (w - pillW - 6.dp.toPx()).coerceAtLeast(plotLeft + 1f)
+        val windowMs = 60_000L // 显示最近 60 秒
+        val speed = (plotRight - plotLeft) / windowMs.toFloat()
 
         // 上中下三区：功率 / 电压 / 电流
         val zoneGap = 4.dp.toPx()
@@ -88,12 +90,18 @@ fun MetricsChart(points: List<HistoryStore.Point>, modifier: Modifier = Modifier
         }
         if (points.size < 2) return@Canvas
 
-        // 固定滑动窗口：始终显示最近 WINDOW 个点，新点到达时整条线左移一格
-        val window = 60
-        val win = points.takeLast(window)
-        val stepX = (plotRight - plotLeft) / (window - 1)
-        // 点数不足窗口时靠右排布，曲线从右向左生长
-        val slotOffset = window - win.size
+        val lastTs = points.last().timestamp
+        // 无新数据时曲线停在原位（最多停在最新点后两个刷新周期）
+        val anchorNow = minOf(now, lastTs + refreshMs * 2L)
+        val win = points.filter { anchorNow + refreshMs - it.timestamp <= windowMs }
+        if (win.size < 2) return@Canvas
+
+        // 最新点横向目标位置（右缘预留一个刷新间隔）
+        val targetX = plotRight - (anchorNow + refreshMs - lastTs) * speed
+        if (capsuleX[0] < 0f) capsuleX[0] = targetX
+        capsuleX[0] += (targetX - capsuleX[0]) * 0.22f // 惯性追赶，像球滚动
+
+        fun xOf(t: Long): Float = plotRight - (anchorNow + refreshMs - t) * speed
 
         fun drawZone(color: Color, values: List<Float>, name: String, value: String, zone: Pair<Float, Float>) {
             val (zt, zb) = zone
@@ -106,11 +114,8 @@ fun MetricsChart(points: List<HistoryStore.Point>, modifier: Modifier = Modifier
                 if (v > hi) hi = v
             }
             val range = (hi - lo).coerceAtLeast(0.0001f)
-            val pts = values.mapIndexed { i, v ->
-                Offset(
-                    plotLeft + (i + slotOffset - phi) * stepX,
-                    zb - pad - ((v - lo) / range) * (zoneHh - 2 * pad)
-                )
+            val pts = win.mapIndexed { i, p ->
+                Offset(xOf(p.timestamp), zb - pad - ((values[i] - lo) / range) * (zoneHh - 2 * pad))
             }
 
             // 原始数据直连，保留起伏
@@ -123,10 +128,10 @@ fun MetricsChart(points: List<HistoryStore.Point>, modifier: Modifier = Modifier
                 style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
             )
 
-            // 头部小胶囊：显示当前值
-            val last = pts.last()
-            val left = last.x + 2.dp.toPx()
-            val top = (last.y - pillH / 2).coerceIn(zt + 2.dp.toPx(), zb - pillH - 2.dp.toPx())
+            // 头部小胶囊：水平位置惯性平滑，垂直跟随最新值
+            val headY = pts.last().y
+            val left = (capsuleX[0] + 2.dp.toPx()).coerceIn(plotLeft, w - pillW)
+            val top = (headY - pillH / 2).coerceIn(zt + 2.dp.toPx(), zb - pillH - 2.dp.toPx())
             val rect = Rect(left, top, left + pillW, top + pillH)
             drawRoundRect(
                 color.copy(alpha = 0.94f),
