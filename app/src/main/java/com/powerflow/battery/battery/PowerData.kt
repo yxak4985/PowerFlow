@@ -79,6 +79,12 @@ object PowerReader {
         } else {
             voltageEstimated = false
         }
+        // 双电芯串联机型（如一加 Ace 2：2×2500mAh @7.78V，官方等效 5000mAh @3.89V）：
+        // 系统上报的是等效单电芯电压（3~5V），整组电压约 ×2。
+        // 电量计为等效容量口径（5000），差分估算公式用等效电压恰好得到整组功率，
+        // 因此只有「显示电压」与「传感器功率」用整组电压，估算路径保持等效电压。
+        val perCellReport = dualCell && rawVoltage in 3000..5500
+        val displayVoltageMv = if (perCellReport) voltageMv * 2 else voltageMv
         val tempC = (intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0) / 10.0
         val plugged = intent?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0
 
@@ -111,15 +117,15 @@ object PowerReader {
 
         // 电流传感器在部分机型上是噪声（实测 ±1.5mA 内随机跳），
         // 只有当“电流 × 电压”达到 0.05W 以上才采信，否则一律走估算
-        if (voltageMv > 0 && abs(currentUa.toLong()) in 1000..100_000_000) {
-            val p = abs(currentUa).toDouble() * voltageMv / 1_000_000_000.0
+        if (displayVoltageMv > 0 && abs(currentUa.toLong()) in 1000..100_000_000) {
+            val p = abs(currentUa).toDouble() * displayVoltageMv / 1_000_000_000.0
             if (p >= 0.05) {
                 powerW = p
                 source = PowerSource.SENSOR
             }
         }
-        if (source == PowerSource.NONE && voltageMv > 0 && abs(averageUa.toLong()) in 1000..100_000_000) {
-            val p = abs(averageUa).toDouble() * voltageMv / 1_000_000_000.0
+        if (source == PowerSource.NONE && displayVoltageMv > 0 && abs(averageUa.toLong()) in 1000..100_000_000) {
+            val p = abs(averageUa).toDouble() * displayVoltageMv / 1_000_000_000.0
             if (p >= 0.05) {
                 powerW = p
                 source = PowerSource.SENSOR
@@ -137,16 +143,16 @@ object PowerReader {
             }
         }
 
-        if (voltageMv <= 0 || powerW <= 0 || powerW > 500) {
+        if (displayVoltageMv <= 0 || powerW <= 0 || powerW > 500) {
             powerW = 0.0
             estimated = false
             source = PowerSource.NONE
         }
-        val currentA = if (powerW > 0 && voltageMv > 0) powerW * 1000.0 / voltageMv else 0.0
+        val currentA = if (powerW > 0 && displayVoltageMv > 0) powerW * 1000.0 / displayVoltageMv else 0.0
 
         return BatterySnapshot(
             level = level,
-            voltageMv = voltageMv,
+            voltageMv = displayVoltageMv,
             currentA = currentA,
             powerW = powerW,
             charging = charging,

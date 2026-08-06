@@ -41,7 +41,7 @@
     <string name="switch_lock_capsule">锁屏显示胶囊</string>
     <string name="switch_lock_capsule_sub">独立于悬浮胶囊：仅开启此项时只在锁屏显示（需开启悬浮窗权限）</string>
     <string name="switch_dual_cell">双电芯电池</string>
-    <string name="switch_dual_cell_sub">串联双电芯机型电压显示约 7~9V；开启后按双电芯电压范围识别，避免误判为异常</string>
+    <string name="switch_dual_cell_sub">双电芯串联机型（如一加 Ace 2）系统上报等效电压约 4V；开启后按整组电压显示（约 8V）并校正功率</string>
     <string name="refresh_interval">刷新间隔</string>
 
     <!-- 实时曲线 -->
