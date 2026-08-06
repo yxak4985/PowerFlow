@@ -87,9 +87,9 @@ app/src/main/java/com/powerflow/battery/
 ├── battery/HealthStore.kt    电池健康（满电容量平均值估算）
 ├── service/PowerMonitorService.kt  前台服务：实时活动通知 + 悬浮胶囊 + 锁屏
 ├── service/BootReceiver.kt   开机自启
-├── ui/MainScreen.kt          主界面（Liquid Glass 仪表盘 + 设置 + 健康卡片）
+├── ui/MainScreen.kt          主界面（光场仪表盘 + 设置 + 健康卡片）
 ├── ui/Components.kt          极光背景 / 玻璃卡片等组件
-├── ui/theme/                 Liquid Glass 主题
+├── ui/theme/                 光场主题
 └── util/                     偏好设置、格式化、OPPO 设置跳转
 ```
 
@@ -99,14 +99,7 @@ app/src/main/java/com/powerflow/battery/
 - Android 16 Live Updates（`android.app.ProgressStyle` 等平台 API）
 - 前台服务（`specialUse`）+ 悬浮窗 + 开机广播
 
-## 贡献
-
-欢迎提交 Issue 和 Pull Request，详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 开源许可
 
 [MIT License](LICENSE)
-
-## 致谢
-
-- 真机适配与测试：OnePlus（ColorOS 16）与 OPPO Pad 5（OPD2506 / ColorOS 16.1）
