@@ -1,8 +1,14 @@
 package com.powerflow.battery.ui.components
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -26,11 +32,12 @@ import com.powerflow.battery.ui.theme.AccentCharging
 import com.powerflow.battery.ui.theme.LiquidAmber
 import com.powerflow.battery.ui.theme.LiquidBlue
 import com.powerflow.battery.util.Format
+import com.powerflow.battery.util.Prefs
 
 /**
  * 功率 / 电压 / 电流三区曲线：上区功率、中区电压、下区电流，各区独立缩放。
- * 数据先做滑动平均，再用二次贝塞尔中点插值平滑，视觉上更流畅、刷新更连贯；
- * 每条线末端是一个小胶囊，实时显示该区当前值。
+ * 数据保留原始起伏（不做平滑）；新数据点到达时整条线连续向左滑动（滚动动画），
+ * 刷新观感流畅连贯。每条线末端是小胶囊，实时显示该区当前值。
  */
 @Composable
 fun MetricsChart(points: List<HistoryStore.Point>, modifier: Modifier = Modifier) {
@@ -40,6 +47,20 @@ fun MetricsChart(points: List<HistoryStore.Point>, modifier: Modifier = Modifier
     val powerName = stringResource(R.string.chart_power)
     val voltageName = stringResource(R.string.chart_voltage)
     val currentName = stringResource(R.string.chart_current)
+
+    // 滚动动画：每次新点到达，相位从 0 滑到 1（持续一个刷新周期），整条线连续左移
+    val slide = remember { Animatable(0f) }
+    val lastTs = points.lastOrNull()?.timestamp
+    LaunchedEffect(lastTs) {
+        if (lastTs != null) {
+            slide.snapTo(0f)
+            slide.animateTo(
+                1f,
+                animationSpec = tween(durationMillis = Prefs.refreshMs, easing = LinearEasing)
+            )
+        }
+    }
+    val phi = slide.value
 
     Canvas(modifier) {
         val w = size.width
@@ -67,15 +88,12 @@ fun MetricsChart(points: List<HistoryStore.Point>, modifier: Modifier = Modifier
         }
         if (points.size < 2) return@Canvas
 
-        // 滑动平均去抖，让曲线更平滑
-        fun movingAverage(values: List<Float>): List<Float> {
-            if (values.size < 3) return values
-            val out = values.toMutableList()
-            for (i in 1 until values.size - 1) {
-                out[i] = (values[i - 1] + values[i] * 2f + values[i + 1]) / 4f
-            }
-            return out
-        }
+        // 固定滑动窗口：始终显示最近 WINDOW 个点，新点到达时整条线左移一格
+        val window = 60
+        val win = points.takeLast(window)
+        val stepX = (plotRight - plotLeft) / (window - 1)
+        // 点数不足窗口时靠右排布，曲线从右向左生长
+        val slotOffset = window - win.size
 
         fun drawZone(color: Color, values: List<Float>, name: String, value: String, zone: Pair<Float, Float>) {
             val (zt, zb) = zone
@@ -88,22 +106,17 @@ fun MetricsChart(points: List<HistoryStore.Point>, modifier: Modifier = Modifier
                 if (v > hi) hi = v
             }
             val range = (hi - lo).coerceAtLeast(0.0001f)
-            val stepX = (plotRight - plotLeft) / (values.size - 1)
-            val smooth = movingAverage(values)
-            val pts = smooth.mapIndexed { i, v ->
-                Offset(plotLeft + stepX * i, zb - pad - ((v - lo) / range) * (zoneHh - 2 * pad))
+            val pts = values.mapIndexed { i, v ->
+                Offset(
+                    plotLeft + (i + slotOffset - phi) * stepX,
+                    zb - pad - ((v - lo) / range) * (zoneHh - 2 * pad)
+                )
             }
 
-            // 二次贝塞尔中点插值：圆滑连接所有点
+            // 原始数据直连，保留起伏
             val path = Path().apply {
                 moveTo(pts.first().x, pts.first().y)
-                for (i in 0 until pts.size - 1) {
-                    val a = pts[i]
-                    val b = pts[i + 1]
-                    val mid = Offset((a.x + b.x) / 2f, (a.y + b.y) / 2f)
-                    quadraticBezierTo(a.x, a.y, mid.x, mid.y)
-                }
-                lineTo(pts.last().x, pts.last().y)
+                for (p in pts.drop(1)) lineTo(p.x, p.y)
             }
             drawPath(
                 path, color,
@@ -112,7 +125,7 @@ fun MetricsChart(points: List<HistoryStore.Point>, modifier: Modifier = Modifier
 
             // 头部小胶囊：显示当前值
             val last = pts.last()
-            val left = plotRight + 2.dp.toPx()
+            val left = last.x + 2.dp.toPx()
             val top = (last.y - pillH / 2).coerceIn(zt + 2.dp.toPx(), zb - pillH - 2.dp.toPx())
             val rect = Rect(left, top, left + pillW, top + pillH)
             drawRoundRect(
@@ -141,9 +154,9 @@ fun MetricsChart(points: List<HistoryStore.Point>, modifier: Modifier = Modifier
             drawText(nameLayout, topLeft = Offset(plotLeft + 2.dp.toPx(), zt + 2.dp.toPx()))
         }
 
-        val last = points.last()
-        drawZone(AccentCharging, points.map { it.powerW.toFloat() }, powerName, Format.powerWithUnit(last.powerW), zones[0])
-        drawZone(LiquidBlue, points.map { it.voltageMv.toFloat() }, voltageName, Format.voltage(last.voltageMv), zones[1])
-        drawZone(LiquidAmber, points.map { it.currentA.toFloat() }, currentName, Format.current(last.currentA), zones[2])
+        val last = win.last()
+        drawZone(AccentCharging, win.map { it.powerW.toFloat() }, powerName, Format.powerWithUnit(last.powerW), zones[0])
+        drawZone(LiquidBlue, win.map { it.voltageMv.toFloat() }, voltageName, Format.voltage(last.voltageMv), zones[1])
+        drawZone(LiquidAmber, win.map { it.currentA.toFloat() }, currentName, Format.current(last.currentA), zones[2])
     }
 }
