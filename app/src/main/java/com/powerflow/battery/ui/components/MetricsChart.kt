@@ -40,8 +40,8 @@ fun MetricsChart(points: List<HistoryStore.Point>, modifier: Modifier = Modifier
     Canvas(modifier) {
         val w = size.width
         val h = size.height
-        val pillW = 88.dp.toPx()
-        val pillH = 26.dp.toPx()
+        val pillW = 64.dp.toPx()
+        val pillH = 20.dp.toPx()
         val plotLeft = 10.dp.toPx()
         val plotRight = (w - pillW - 8.dp.toPx()).coerceAtLeast(plotLeft + 1f)
 
@@ -52,8 +52,9 @@ fun MetricsChart(points: List<HistoryStore.Point>, modifier: Modifier = Modifier
         }
         if (points.size < 2) return@Canvas
 
-        // 每个序列独立映射到绘图区（避免量级差异互相压扁）
-        fun seriesOffsets(values: List<Float>): List<Offset> {
+        // 每个序列独立映射到绘图区（避免量级差异互相压扁），
+        // biasPx 给三条线分配泳道：功率在中、电压偏上、电流偏下，互不遮挡
+        fun seriesOffsets(values: List<Float>, biasPx: Float): List<Offset> {
             var lo = values[0]
             var hi = values[0]
             for (v in values) {
@@ -62,16 +63,19 @@ fun MetricsChart(points: List<HistoryStore.Point>, modifier: Modifier = Modifier
             }
             val range = (hi - lo).coerceAtLeast(0.0001f)
             val stepX = (plotRight - plotLeft) / (values.size - 1)
-            val topPad = h * 0.10f
-            val bottomPad = h * 0.10f
+            val topPad = h * 0.12f
+            val bottomPad = h * 0.12f
             return values.mapIndexed { i, v ->
-                Offset(plotLeft + stepX * i, h - bottomPad - ((v - lo) / range) * (h - topPad - bottomPad))
+                Offset(
+                    plotLeft + stepX * i,
+                    h - bottomPad - ((v - lo) / range) * (h - topPad - bottomPad) + biasPx
+                )
             }
         }
 
         // 尾线 + 头部胶囊：胶囊内显示该指标当前值
-        fun drawSperm(color: Color, values: List<Float>, label: String) {
-            val pts = seriesOffsets(values)
+        fun drawSperm(color: Color, values: List<Float>, label: String, biasPx: Float) {
+            val pts = seriesOffsets(values, biasPx)
             if (pts.size < 2) return
             val path = Path().apply {
                 moveTo(pts.first().x, pts.first().y)
@@ -93,7 +97,7 @@ fun MetricsChart(points: List<HistoryStore.Point>, modifier: Modifier = Modifier
             )
             val layout = textMeasurer.measure(
                 AnnotatedString(label),
-                style = TextStyle(color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                style = TextStyle(color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             )
             drawText(
                 layout,
@@ -104,8 +108,9 @@ fun MetricsChart(points: List<HistoryStore.Point>, modifier: Modifier = Modifier
             )
         }
 
-        drawSperm(LiquidBlue, points.map { it.voltageMv.toFloat() }, Format.voltage(points.last().voltageMv))
-        drawSperm(LiquidAmber, points.map { it.currentA.toFloat() }, Format.current(points.last().currentA))
-        drawSperm(AccentCharging, points.map { it.powerW.toFloat() }, Format.powerWithUnit(points.last().powerW))
+        val lane = h * 0.11f
+        drawSperm(LiquidBlue, points.map { it.voltageMv.toFloat() }, Format.voltage(points.last().voltageMv), -lane)
+        drawSperm(LiquidAmber, points.map { it.currentA.toFloat() }, Format.current(points.last().currentA), lane)
+        drawSperm(AccentCharging, points.map { it.powerW.toFloat() }, Format.powerWithUnit(points.last().powerW), 0f)
     }
 }

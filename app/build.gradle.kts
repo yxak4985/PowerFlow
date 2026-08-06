@@ -13,8 +13,8 @@ android {
         applicationId = "com.powerflow.battery"
         minSdk = 26
         targetSdk = 37
-        versionCode = 33
-        versionName = "2.3"
+        versionCode = 34
+        versionName = "2.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
