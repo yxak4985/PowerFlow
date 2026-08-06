@@ -11,6 +11,7 @@ object Prefs {
     private const val KEY_CAPSULE = "capsule_enabled"
     private const val KEY_LOCK_CAPSULE = "capsule_lock_screen"
     private const val KEY_REFRESH = "refresh_ms"
+    private const val KEY_DUAL_CELL = "dual_cell"
     private const val KEY_DESIGN_CAPACITY = "design_capacity"
     private const val KEY_MAX_FCC = "max_fcc"
     private const val KEY_LAST_FCC = "last_fcc"
@@ -46,6 +47,11 @@ object Prefs {
     var refreshMs: Int
         get() = sp.getInt(KEY_REFRESH, 1000)
         set(value) { sp.edit().putInt(KEY_REFRESH, value).apply() }
+
+    /** 手机是否为串联双电芯方案：电压约翻倍，容量计量方式与单电芯不同。 */
+    var dualCell: Boolean
+        get() = sp.getBoolean(KEY_DUAL_CELL, false)
+        set(value) { sp.edit().putBoolean(KEY_DUAL_CELL, value).apply() }
 
     /** 用户手动设置的设计容量（mAh），0 表示未知。 */
     var designCapacity: Int
@@ -117,5 +123,20 @@ object Prefs {
                 val counter = part.substring(idx + 1).toLongOrNull() ?: return@mapNotNull null
                 lv to counter
             } ?: emptyList()
+    }
+
+    /**
+     * 清空电池健康检测的全部采样与校准数据（保留手动设置的设计容量）。
+     * 切换双电芯开关或用户主动重置时调用，避免新旧量纲不同的采样混在一起取平均。
+     */
+    fun resetHealthData() {
+        sp.edit()
+            .remove(KEY_MAX_FCC)
+            .remove(KEY_LAST_FCC)
+            .remove(KEY_CALIB_POINTS)
+            .remove(KEY_FCC_SUM)
+            .remove(KEY_FCC_COUNT)
+            .remove(KEY_FCC_LAST_VALUE)
+            .apply()
     }
 }

@@ -89,9 +89,11 @@ fun MainScreen() {
     var capsuleOn by remember { mutableStateOf(Prefs.capsuleEnabled) }
     var lockCapsuleOn by remember { mutableStateOf(Prefs.capsuleLockScreen) }
     var refreshMs by remember { mutableStateOf(Prefs.refreshMs) }
+    var dualCellOn by remember { mutableStateOf(Prefs.dualCell) }
     var notifGranted by remember { mutableStateOf(NotificationManagerCompat.from(context).areNotificationsEnabled()) }
     var overlayGranted by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
     var showDesignDialog by remember { mutableStateOf(false) }
+    var showResetDialog by remember { mutableStateOf(false) }
     var designInput by remember { mutableStateOf("") }
     var showOverlayPrompt by remember { mutableStateOf(false) }
     var showBatteryPrompt by remember { mutableStateOf(false) }
@@ -189,6 +191,14 @@ fun MainScreen() {
         Prefs.capsuleLockScreen = on
         lockCapsuleOn = on
         sendCapsuleUpdate()
+    }
+
+    val toggleDualCell: (Boolean) -> Unit = { on ->
+        Prefs.dualCell = on
+        dualCellOn = on
+        // 双电芯切换后电压/容量量纲改变，旧采样数据不再可比较，自动清空重新统计
+        Prefs.resetHealthData()
+        HealthStore.refresh()
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -408,19 +418,27 @@ fun MainScreen() {
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(Modifier.height(6.dp))
-                        TextButton(onClick = {
-                            designInput = if (Prefs.designCapacity > 0) Prefs.designCapacity.toString() else ""
-                            showDesignDialog = true
-                        }) {
-                            Text(stringResource(R.string.health_set_design))
-                        }
                     } else {
                         Text(
                             text = stringResource(R.string.health_loading),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Row {
+                        TextButton(onClick = {
+                            designInput = if (Prefs.designCapacity > 0) Prefs.designCapacity.toString() else ""
+                            showDesignDialog = true
+                        }) {
+                            Text(stringResource(R.string.health_set_design))
+                        }
+                        TextButton(onClick = { showResetDialog = true }) {
+                            Text(
+                                text = stringResource(R.string.health_reset),
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
                 }
             }
@@ -462,6 +480,13 @@ fun MainScreen() {
                         checked = lockCapsuleOn && capsuleOn && monitorOn,
                         enabled = capsuleOn && monitorOn,
                         onCheckedChange = toggleLockCapsule
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                    GlassSwitchRow(
+                        title = stringResource(R.string.switch_dual_cell),
+                        subtitle = stringResource(R.string.switch_dual_cell_sub),
+                        checked = dualCellOn,
+                        onCheckedChange = toggleDualCell
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(
@@ -600,6 +625,28 @@ fun MainScreen() {
                 },
                 dismissButton = {
                     TextButton(onClick = { showDesignDialog = false }) {
+                        Text(stringResource(R.string.health_cancel))
+                    }
+                }
+            )
+        }
+
+        if (showResetDialog) {
+            AlertDialog(
+                onDismissRequest = { showResetDialog = false },
+                title = { Text(stringResource(R.string.health_reset_title)) },
+                text = { Text(stringResource(R.string.health_reset_msg)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        Prefs.resetHealthData()
+                        HealthStore.refresh()
+                        showResetDialog = false
+                    }) {
+                        Text(stringResource(R.string.health_reset_confirm))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showResetDialog = false }) {
                         Text(stringResource(R.string.health_cancel))
                     }
                 }

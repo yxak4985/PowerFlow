@@ -62,11 +62,18 @@ object PowerReader {
         val rawVoltage = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) ?: 0
         var voltageMv = rawVoltage
         val voltageEstimated: Boolean
+        val dualCell = Prefs.dualCell
         // OPPO 部分机型(如 OPD2506 / ColorOS 16.1)的电压广播长期不更新，
-        // 实测广播值恒为 4（单位不明），真实电池电压充电时约 4.4V，需要兜底：
-        if (voltageMv !in 1000..6000) {
+        // 实测广播值恒为 4（单位不明），真实电池电压充电时约 4.4V，需要兜底；
+        // 串联双电芯机型电压约翻倍（满电约 8.4~9V），校验范围与兜底值都要 ×2：
+        val validVoltageRange = if (dualCell) 1000..12000 else 1000..6000
+        if (voltageMv !in validVoltageRange) {
             // 充电时电池电压接近满电电压；放电时按电量用典型锂电曲线估算
-            voltageMv = if (charging) 4400 else 3300 + level * 9
+            voltageMv = if (charging) {
+                if (dualCell) 8800 else 4400
+            } else {
+                if (dualCell) 6600 + level * 18 else 3300 + level * 9
+            }
             voltageEstimated = true
         } else {
             voltageEstimated = false
@@ -234,6 +241,8 @@ object PowerReader {
 
     /** 电量变化一个百分点就记录一个校准点，持久化后重启也能用于健康度计算。 */
     private fun persistCalibration(level: Int, counterUah: Long) {
+        // 健康度检测只在电量 20%~85% 区间进行，区间外不采集校准点
+        if (level !in 20..85) return
         if (level == lastCalibLevel || counterUah <= 0) return
         lastCalibLevel = level
         Prefs.addCalibrationPoint(level, counterUah)
@@ -253,7 +262,7 @@ object PowerReader {
                 add(Sample(0L, counter, 0, lv))
             }
             addAll(current)
-        }
+        }.filter { it.level in 20..85 } // 只使用电量 20%~85% 区间的采样对
         if (all.size < 2) return null
         var bestFcc = 0.0
         var bestSpan = 0
@@ -264,7 +273,8 @@ object PowerReader {
                 val span = abs(b.level - a.level)
                 if (span >= 1) {
                     val dq = abs(b.value - a.value).toDouble() // µAh
-                    val fcc = dq / span * 100.0 / 1000.0 // mAh
+                    // 双电芯机型的电量计通常只对应单电芯，容量按整机口径需要 ×2
+                    val fcc = dq / span * 100.0 / 1000.0 * (if (Prefs.dualCell) 2.0 else 1.0) // mAh
                     if (fcc in 2000.0..30000.0 && span > bestSpan) {
                         bestFcc = fcc
                         bestSpan = span
@@ -283,8 +293,10 @@ object PowerReader {
     fun estimateFccFromLevel(): Double? {
         val lv = lastLevel
         val counter = lastCounterUah
-        if (lv in 5..95 && counter > 0) {
-            val fcc = counter / lv.toDouble() * 100.0 / 1000.0
+        // 电量 20%~85% 区间外（如涓流区/快充末期）电量计换算不可信
+        if (lv in 20..85 && counter > 0) {
+            // 双电芯机型：电量计对应单电芯容量，换算整机口径需 ×2
+            val fcc = counter / lv.toDouble() * 100.0 / 1000.0 * (if (Prefs.dualCell) 2.0 else 1.0)
             if (fcc in 2000.0..30000.0) return fcc
         }
         return null
